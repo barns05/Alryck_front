@@ -1,27 +1,49 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
-const METIERS_GROUPES = [
-  { groupe: 'Lieux et réception', metiers: ['Salle de réception','Lieu de prestige / Château','Domaine viticole / Château viticole','Domaine privé','Mas / Bastide','Villa privatisable','Espace plein air / Jardin','Salle de spectacle','Salon événementiel','Restaurant privatisable','Espace atypique','Péniche / Bateau','Rooftop',"Musée / Galerie d'art"] },
-  { groupe: 'Restauration et traiteur', metiers: ['Traiteur événementiel','Chef à domicile','Pâtissier / Wedding cake','Candy bar / Sweet table','Food truck événementiel'] },
-  { groupe: 'Image et souvenir', metiers: ['Photographe','Vidéaste','Photobooth'] },
-  { groupe: 'Musique et animation', metiers: ['DJ','Musicien / Groupe','Animateur','Magicien / Artiste','Sonorisation / Éclairage'] },
-  { groupe: 'Organisation', metiers: ['Wedding Planner','Chef de projet événementiel','Maître de cérémonie'] },
-  { groupe: 'Décoration et floral', metiers: ['Fleuriste','Décorateur','Scénographe'] },
-  { groupe: 'Beauté et bien-être', metiers: ['Coiffeur / Maquilleur','Spa événementiel'] },
-  { groupe: 'Transport et prestige', metiers: ['Limousine / VTC prestige','Hélicoptère événementiel'] },
-  { groupe: 'Logistique et technique', metiers: ['Location de matériel','Sécurité événementielle'] },
-  { groupe: 'Autre', metiers: ['Autre prestataire'] },
-];
+// La liste des métiers vient désormais du référentiel servi par le back (GET /api/trades) et
+// non plus d'un tableau codé ici. Elle porte des codes stables, ce qui permet de rattacher la
+// vitrine de l'établissement au métier choisi — un libellé seul ne le permettait pas, et se
+// serait décorrélé au premier renommage.
+function groupByFamily(trades) {
+  const groups = [];
+  for (const trade of trades) {
+    const family = trade.family || 'Autre';
+    let group = groups.find(g => g.family === family);
+    if (!group) groups.push((group = { family, trades: [] }));
+    group.trades.push(trade);
+  }
+  return groups;
+}
 
 const inputCls = "bg-white/[0.08] border-white/[0.15] text-white placeholder:text-white/40 focus-visible:ring-amber-400/60";
 const labelCls = "text-sm font-medium text-white/70";
 
-export default function RegisterFormPro({ onNeedOtp, onSuccess, onBack }) {
-  const [form, setForm] = useState({ prenom: '', nom: '', email: '', password: '', confirmPassword: '', companyName: '', metier: '' });
+/** Longueur minimale imposée par ASP.NET Identity côté serveur. */
+const PASSWORD_MIN = 10;
+
+/** Traduit les codes d'erreur stables du back en message lisible. */
+function messageFor(err) {
+  switch (err?.code) {
+    case 'auth.email_taken':
+      return 'Un compte existe déjà avec cette adresse.';
+    case 'auth.invalid_credentials':
+      return 'Un compte existe déjà avec cette adresse, et ce mot de passe ne correspond pas.';
+    case 'auth.weak_password':
+      return err.payload?.errors?.join(' ') || 'Ce mot de passe est trop faible.';
+    case 'tenant.slug_taken':
+      return "Ce nom d'entreprise est déjà utilisé sur la plateforme. Essayez une variante.";
+    default:
+      return err?.message || 'Une erreur est survenue.';
+  }
+}
+
+export default function RegisterFormPro({ onSuccess, onBack }) {
+  const [form, setForm] = useState({ prenom: '', nom: '', email: '', password: '', confirmPassword: '', companyName: '', tradeCode: '' });
+  const [tradeGroups, setTradeGroups] = useState([]);
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,36 +51,65 @@ export default function RegisterFormPro({ onNeedOtp, onSuccess, onBack }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Le métier est facultatif : si le référentiel est injoignable, on laisse le champ vide
+  // plutôt que de bloquer une inscription pour un choix qui pourra se faire plus tard.
+  useEffect(() => {
+    let cancelled = false;
+    base44.referentials.trades()
+      .then(trades => { if (!cancelled) setTradeGroups(groupByFamily(trades ?? [])); })
+      .catch(() => { if (!cancelled) setTradeGroups([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (form.password !== form.confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (form.password.length < PASSWORD_MIN) {
+      setError(`Le mot de passe doit contenir au moins ${PASSWORD_MIN} caractères.`);
+      return;
+    }
     setLoading(true);
     try {
-      await base44.auth.register({ email: form.email, password: form.password });
+      // 1. Le compte. Une personne, un compte, global à la plateforme : il n'appartient
+      //    encore à aucune entreprise et le jeton renvoyé ne porte donc aucun contexte.
       try {
-        await base44.auth.loginViaEmailPassword(form.email, form.password);
-        await base44.auth.updateMe({
-          full_name: `${form.prenom} ${form.nom}`.trim(),
-          role: 'admin',
-          onboarding_completed: false,
+        await base44.auth.register({
+          email: form.email,
+          password: form.password,
+          firstName: form.prenom,
+          lastName: form.nom,
+          displayName: `${form.prenom} ${form.nom}`.trim(),
         });
-        await base44.entities.CompanySettings.create({
-          company_name: form.companyName,
-          metier: form.metier || undefined,
-        });
-        onSuccess('/Dashboard');
-      } catch {
-        onNeedOtp(form.email, async () => {
-          await base44.auth.loginViaEmailPassword(form.email, form.password);
-          await base44.auth.updateMe({ full_name: `${form.prenom} ${form.nom}`.trim(), role: 'admin', onboarding_completed: false });
-          await base44.entities.CompanySettings.create({ company_name: form.companyName, metier: form.metier || undefined });
-          onSuccess('/Dashboard');
-        });
+      } catch (err) {
+        if (err?.code !== 'auth.email_taken') throw err;
+
+        // L'inscription se fait en deux écritures : le compte, puis l'entreprise. Si la
+        // seconde échoue, l'adresse est prise sans que l'entreprise existe — et réessayer
+        // buterait indéfiniment sur ce compte orphelin. On reprend donc la main, à condition
+        // que le mot de passe corresponde : une adresse déjà prise par quelqu'un d'autre
+        // reste refusée, la connexion s'en charge.
+        const session = await base44.auth.loginViaEmailPassword(form.email, form.password);
+
+        // Compte déjà rattaché à une entreprise : il n'y a rien à créer, c'est une connexion.
+        if (session.contexts?.length) { onSuccess('/Dashboard'); return; }
       }
+
+      // 2. L'entreprise, dans la foulée. Le serveur crée l'entreprise, son établissement
+      //    principal et l'appartenance du créateur (propriétaire) en une transaction, puis
+      //    réémet un jeton portant déjà ce contexte — d'où l'absence de reconnexion ici.
+      //
+      //    Remplace `CompanySettings.create()` : la création d'entreprise n'est pas
+      //    l'écriture d'un enregistrement, c'est l'ouverture d'un périmètre d'isolation.
+      //    Le métier, s'il est renseigné, amorce la vitrine de l'établissement principal.
+      await base44.tenants.create({
+        name: form.companyName,
+        tradeCode: form.tradeCode || undefined,
+      });
+
+      onSuccess('/Dashboard');
     } catch (err) {
-      setError(err?.message || 'Une erreur est survenue. Cet email est peut-être déjà utilisé.');
+      setError(messageFor(err));
     } finally {
       setLoading(false);
     }
@@ -100,12 +151,17 @@ export default function RegisterFormPro({ onNeedOtp, onSuccess, onBack }) {
         {/* Métier */}
         <div className="space-y-1.5">
           <label className={labelCls}>Votre métier</label>
-          <select value={form.metier} onChange={e => set('metier', e.target.value)}
-            className="flex h-9 w-full rounded-md border border-white/[0.15] bg-white/[0.08] px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400/60">
-            <option value="" className="bg-slate-900">— Choisir votre métier —</option>
-            {METIERS_GROUPES.map(g => (
-              <optgroup key={g.groupe} label={g.groupe} className="bg-slate-900">
-                {g.metiers.map(m => <option key={m} value={m} className="bg-slate-900">{m}</option>)}
+          <select value={form.tradeCode} onChange={e => set('tradeCode', e.target.value)}
+            disabled={tradeGroups.length === 0}
+            className="flex h-9 w-full rounded-md border border-white/[0.15] bg-white/[0.08] px-3 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400/60 disabled:opacity-50">
+            <option value="" className="bg-slate-900">
+              {tradeGroups.length === 0 ? '— Chargement… —' : '— Choisir votre métier —'}
+            </option>
+            {tradeGroups.map(g => (
+              <optgroup key={g.family} label={g.family} className="bg-slate-900">
+                {g.trades.map(t => (
+                  <option key={t.code} value={t.code} className="bg-slate-900">{t.label}</option>
+                ))}
               </optgroup>
             ))}
           </select>
@@ -124,7 +180,7 @@ export default function RegisterFormPro({ onNeedOtp, onSuccess, onBack }) {
           <div className="relative">
             <Input required type={showPwd ? 'text' : 'password'} value={form.password}
               onChange={e => set('password', e.target.value)}
-              placeholder="Minimum 8 caractères" className={`${inputCls} pr-10`} />
+              placeholder={`Minimum ${PASSWORD_MIN} caractères`} className={`${inputCls} pr-10`} />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors">
               {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}

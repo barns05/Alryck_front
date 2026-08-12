@@ -183,8 +183,27 @@ const auth = {
     return cachedUser;
   },
 
-  updateMe: async (data) => {
-    const updated = await request('/api/me', { method: 'PUT', body: data });
+  /**
+   * Mise à jour du profil personnel.
+   *
+   * Le front hérité parle encore la forme Base44 (`full_name`, `role`,
+   * `onboarding_completed`) : on traduit les champs qui ont un équivalent et on laisse
+   * tomber les autres. `role` en particulier n'est **pas** transmis : dans Base44 le
+   * navigateur écrivait son propre rôle sur son compte, ici il est porté par l'appartenance
+   * et décidé côté serveur.
+   */
+  updateMe: async (data = {}) => {
+    const body = {
+      displayName: data.displayName ?? data.full_name,
+      firstName: data.firstName ?? data.first_name,
+      lastName: data.lastName ?? data.last_name,
+      avatarUrl: data.avatarUrl ?? data.avatar_url,
+      locale: data.locale,
+    };
+
+    // Les clés `undefined` disparaissent à la sérialisation : le serveur pratique la fusion
+    // partielle, donc n'envoyer que ce qui change suffit.
+    const updated = await request('/api/me', { method: 'PUT', body });
     cachedUser = null;
     return updated;
   },
@@ -216,6 +235,46 @@ const auth = {
   // est créé directement ; la confirmation d'adresse passera par un lien de courriel.
   verifyOtp: async () => ({ verified: true }),
   resendOtp: async () => ({ sent: false, reason: 'otp_non_supporte' }),
+};
+
+// --- Référentiels partagés ---------------------------------------------------
+
+const referentials = {
+  /**
+   * Métiers de la plateforme, plus ceux ajoutés par l'entreprise. Servi sans authentification :
+   * le formulaire d'inscription en a besoin avant que le compte existe.
+   *
+   * Remplace la liste de quarante libellés que le formulaire codait en dur — sans identifiant
+   * stable, donc impossibles à référencer depuis une vitrine ou à filtrer dans l'annuaire.
+   */
+  trades: () => request('/api/trades'),
+};
+
+// --- Entreprise --------------------------------------------------------------
+//  Base44 n'avait pas de notion d'entreprise : `CompanySettings` était un enregistrement
+//  ordinaire que le navigateur créait lui-même. Ici l'entreprise est l'unité d'isolation, sa
+//  création est une transaction serveur (entreprise + établissement principal + appartenance
+//  du créateur) et elle ne peut donc pas passer par l'écriture générique d'une entité.
+
+const tenants = {
+  /**
+   * Crée l'entreprise du compte connecté, qui en devient propriétaire.
+   * Le serveur renvoie un jeton portant déjà ce contexte : inutile de se reconnecter.
+   */
+  create: async ({ name, slug, siren, timeZoneId, establishmentName } = {}) => {
+    const result = await request('/api/tenants', {
+      method: 'POST',
+      body: { name, slug, siren, timeZoneId, establishmentName },
+    });
+
+    tokenStore.set(result.accessToken);
+    tokenStore.setTenant(result.id);
+    cachedUser = null;
+    return result;
+  },
+
+  /** Entreprise du contexte de travail courant, avec ses établissements. */
+  current: () => request('/api/tenants/current'),
 };
 
 // --- Fonctions et intégrations ----------------------------------------------
@@ -250,5 +309,5 @@ const integrations = {
   },
 };
 
-export const base44 = { entities, auth, functions, integrations };
+export const base44 = { entities, auth, tenants, referentials, functions, integrations };
 export default base44;

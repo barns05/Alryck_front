@@ -1,0 +1,13 @@
+# Le contexte de build est envoye au demon Docker avant toute instruction : sans ce fichier,
+# npm ci reconstruirait par-dessus un node_modules copie depuis le poste — donc dependant de
+# l'OS et de l'architecture du developpeur. C'est la cause classique des « ca marche chez moi ».
+node_modules
+dist
+.git
+.github
+.env
+.env.local
+.env.*.local
+_to_delete
+*.md
+!README.md
