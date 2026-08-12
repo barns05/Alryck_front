@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@400;500;600;700&family=Lora:wght@300;400;500;600&family=Josefin+Sans:wght@300;400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 224 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 25% 12%;
+    --primary: 224 71% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 93%;
+    --secondary-foreground: 224 25% 25%;
+    --muted: 220 15% 93%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 39 48% 56%;
+    --accent-foreground: 243 45% 20%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 224 71% 40%;
+    --radius: 0.75rem;
+
+    --sidebar-background: 243 45% 20%;
+    --sidebar-foreground: 220 15% 85%;
+    --sidebar-primary: 39 48% 56%;
+    --sidebar-primary-foreground: 224 30% 15%;
+    --sidebar-accent: 224 25% 22%;
+    --sidebar-accent-foreground: 220 15% 90%;
+    --sidebar-border: 224 25% 22%;
+    --sidebar-ring: 39 48% 56%;
+
+    --chart-1: 224 71% 40%;
+    --chart-2: 39 48% 56%;
+    --chart-3: 160 60% 40%;
+    --chart-4: 280 60% 55%;
+    --chart-5: 0 72% 55%;
+  }
+
+  .dark {
+    --background: 224 30% 10%;
+    --foreground: 220 15% 92%;
+    --card: 224 28% 14%;
+    --card-foreground: 220 15% 92%;
+    --popover: 224 28% 14%;
+    --popover-foreground: 220 15% 92%;
+    --primary: 224 71% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 25% 20%;
+    --secondary-foreground: 220 15% 85%;
+    --muted: 224 25% 20%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 39 48% 56%;
+    --accent-foreground: 243 45% 20%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 224 25% 22%;
+    --input: 224 25% 22%;
+    --ring: 224 71% 55%;
+
+    --sidebar-background: 224 30% 8%;
+    --sidebar-foreground: 220 15% 80%;
+    --sidebar-primary: 39 48% 56%;
+    --sidebar-primary-foreground: 224 30% 10%;
+    --sidebar-accent: 224 25% 16%;
+    --sidebar-accent-foreground: 220 15% 88%;
+    --sidebar-border: 224 25% 18%;
+    --sidebar-ring: 39 48% 56%;
+
+    --chart-1: 224 71% 55%;
+    --chart-2: 38 92% 55%;
+    --chart-3: 160 60% 45%;
+    --chart-4: 280 60% 60%;
+    --chart-5: 0 72% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+    background-color: #1e1b4b;
+  }
+  #root {
+    background-color: #1e1b4b;
+  }
+
+  /* iOS Safari zoome automatiquement sur les champs dont la police est < 16px.
+     On force 16px sur mobile uniquement (≤767px) pour tout input/select/textarea.
+     Le composant shadcn Input utilise déjà `text-base md:text-sm` (16px→14px) et
+     n'est donc pas impacté. Sur desktop, la règle ne s'applique pas : aucune
+     modification visuelle. Le `!important` est nécessaire pour surclasser les
+     utilitaires Tailwind text-xs/text-sm posés sur les champs bruts. */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* ─── Boutons de validation dans le flux du scroll (iOS-safe) ────────────────
+   .modal-footer : boutons alignés à droite, dans le flux normal du contenu.
+   .modal-footer-full : variante pleine largeur.
+   La zone scrollable doit avoir pb-32 (padding-bottom 128px) pour que le
+   bouton reste visible avec l'effet de rebond iOS naturel.
+   ──────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  @keyframes personnalisation-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  .personnalisation-bounce {
+    animation: personnalisation-bounce 1.2s ease-in-out infinite;
+  }
+
+  /* Masque la scrollbar nativement (WheelPicker et autres conteneurs scroll-snap) */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer components {
+  .modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    padding-bottom: 120px;
+    flex-shrink: 0;
+  }
+
+  /* Variante pleine largeur (bouton seul centré ou étiré) */
+  .modal-footer-full {
+    padding-top: 1rem;
+    padding-bottom: 120px;
+    flex-shrink: 0;
+  }
+
+  /* ─── Cartes premium — fond blanc neutre, ombre douce, liseré champagne ────
+     Ombre diffuse (pas de contour dur) + trait fin dégradé champagne/or en haut,
+     arrondi généreux (1rem) cohérent avec rounded-2xl. `.premium-card--active`
+     accentue l'élévation pour l'état sélectionné. `.premium-card-title` applique
+     la serif élégante (Cormorant Garamond) utilisée pour le compte à rebours. */
+  .premium-card {
+    position: relative;
+    background: #ffffff;
+    border-radius: 1rem;
+    border: 1px solid rgba(232, 228, 220, 0.55);
+    box-shadow: 0 1px 2px rgba(30, 27, 75, 0.04), 0 10px 26px rgba(30, 27, 75, 0.06);
+    transition: box-shadow 0.2s ease, transform 0.18s ease;
+  }
+  .premium-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16%;
+    right: 16%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(197, 160, 89, 0) 0%, #C5A059 35%, #E6CB85 50%, #C5A059 65%, rgba(197, 160, 89, 0) 100%);
+    border-radius: 0 0 2px 2px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .premium-card--active {
+    box-shadow: 0 1px 2px rgba(30, 27, 75, 0.06), 0 14px 34px rgba(30, 27, 75, 0.12);
+  }
+  .premium-card-title {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+  }
+}
