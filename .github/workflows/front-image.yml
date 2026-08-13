@@ -1,0 +1,104 @@
+# =====================================================================
+#  Alryck - front : construction et publication de l'image sur ghcr.io
+# =====================================================================
+#  Meme methode que le back : GitHub construit et publie, c'est un humain qui deploie.
+#  Aucun kubeconfig n'est confie a GitHub.
+#
+#  L'adresse de l'API est un parametre de CONSTRUCTION : Vite la substitue dans le bundle.
+#  Elle ne peut donc PAS se choisir au deploiement.
+#
+#  Elle vaut la RECETTE par defaut, quelle que soit la branche. Construire pour la production
+#  suppose un declenchement manuel avec l'adresse explicite :
+#
+#    Actions > Front - image ghcr.io > Run workflow
+#      apiUrl : https://api.alryck.geo2i.com
+#      tag    : v1
+#
+#  Ce n'est pas de la prudence excessive. Une image construite pour la recette et deployee en
+#  production fait taper la production sur la base de recette : les ecrans se remplissent
+#  normalement, avec les mauvaises donnees, et rien a l'ecran ne le signale. Le defaut le
+#  moins dangereux est donc la recette, et le passage en production doit etre un geste.
+# =====================================================================
+name: Front - image ghcr.io
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de l'image (par defaut : dev)"
+        required: false
+        default: ''
+      apiUrl:
+        description: "Adresse de l'API a figer dans le bundle (defaut : recette)"
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: front-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calcul du tag et de l'API
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          API="${{ github.event.inputs.apiUrl }}"
+          # Le tag lisible suit la branche ; c'est le SHA qu'on deploie de toute facon.
+          if [ -z "$TAG" ]; then TAG="dev"; fi
+
+          # L'adresse de l'API ne suit PAS la branche : recette par defaut, production
+          # uniquement sur declenchement manuel avec apiUrl renseigne.
+          if [ -z "$API" ]; then API="https://api.alryck-dev.geo2i.com"; fi
+          echo "tag=$TAG"              >> "$GITHUB_OUTPUT"
+          echo "api=$API"              >> "$GITHUB_OUTPUT"
+          echo "sha7=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            VITE_ALRYCK_API=${{ steps.meta.outputs.api }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/alryck-front:${{ steps.meta.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/alryck-front:${{ steps.meta.outputs.sha7 }}
+          cache-from: type=gha,scope=alryck-front
+          cache-to: type=gha,scope=alryck-front,mode=min
+
+      - name: Recapitulatif
+        run: |
+          {
+            echo "### Image publiee"
+            echo ""
+            echo "- \`ghcr.io/${{ github.repository_owner }}/alryck-front:${{ steps.meta.outputs.sha7 }}\`"
+            echo "- API figee dans le bundle : \`${{ steps.meta.outputs.api }}\`"
+            echo ""
+            echo "L'adresse ci-dessus est figee dans le bundle et ne peut plus changer au"
+            echo "deploiement. Verifie qu'elle correspond a l'environnement vise."
+          } >> "$GITHUB_STEP_SUMMARY"
