@@ -3,7 +3,12 @@ import ProfilePicker, { PROFILES } from '@/components/register/ProfilePicker';
 import RegisterFormPro from '@/components/register/RegisterFormPro';
 import RegisterFormClient from '@/components/register/RegisterFormClient';
 import RegisterFormStaff from '@/components/register/RegisterFormStaff';
-import OtpVerification from '@/components/register/OtpVerification';
+
+// L'étape de vérification par code a été retirée du parcours : le back n'a pas de
+// vérification d'e-mail à l'inscription, et le client d'API stubbe `verifyOtp` en
+// acceptant n'importe quelle saisie. Un écran qui valide tout donne une garantie qui
+// n'existe pas. `OtpVerification.jsx` reste dans le dépôt, prêt à être rebranché le jour
+// où le serveur enverra réellement un code.
 
 const GOLD = '#c9a84c';
 const NAVY_DEEP = '#1e1b4b';
@@ -93,18 +98,6 @@ export default function Register() {
 
   const [step, setStep] = useState(presetProfile ? 'form' : 'pick');
   const [selectedProfile, setSelectedProfile] = useState(presetProfile);
-  const [otpEmail, setOtpEmail] = useState('');
-  const [otpCallback, setOtpCallback] = useState(null);
-
-  const handleNeedOtp = (email, callback) => {
-    setOtpEmail(email);
-    setOtpCallback(() => callback);
-    setStep('otp');
-  };
-
-  const handleOtpVerified = async () => {
-    if (otpCallback) await otpCallback();
-  };
 
   const handleSuccess = (defaultRedirect) => {
     window.location.href = customRedirect || defaultRedirect;
@@ -112,13 +105,13 @@ export default function Register() {
 
   const renderForm = () => {
     if (!selectedProfile) return null;
-    const props = { onNeedOtp: handleNeedOtp, onSuccess: handleSuccess, onBack: () => setStep('pick') };
+    const props = { onSuccess: handleSuccess, onBack: () => setStep('pick') };
     if (selectedProfile.id === 'pro') return <RegisterFormPro {...props} />;
     if (selectedProfile.id === 'client') return <RegisterFormClient {...props} />;
     if (selectedProfile.id === 'staff') return <RegisterFormStaff {...props} />;
   };
 
-  const STEPS = ['pick', 'form', 'otp'];
+  const STEPS = ['pick', 'form'];
 
   return (
     <div
@@ -173,11 +166,6 @@ export default function Register() {
 
           {/* Étape : formulaire selon profil */}
           {step === 'form' && renderForm()}
-
-          {/* Étape : OTP */}
-          {step === 'otp' && (
-            <OtpVerification email={otpEmail} onVerified={handleOtpVerified} />
-          )}
 
           {/* Lien connexion */}
           <p className="text-center" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>

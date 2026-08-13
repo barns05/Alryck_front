@@ -19,6 +19,7 @@ import OnboardingProgress from '@/components/onboarding/OnboardingProgress';
 import UserWorkspaceMenu from '@/components/UserWorkspaceMenu';
 import { useVitrineCompletion } from '@/hooks/useVitrineCompletion';
 import { useOwnerCompanySettings } from '@/hooks/useOwnerCompanySettings';
+import { ROLES, hasRole, isBackOffice } from '@/lib/roles';
 
 // ─── Définition des sections ──────────────────────────────────────────────────
 
@@ -105,8 +106,12 @@ export default function Layout() {
   const modules = Object.fromEntries(
     Object.keys(MODULES_DEFAULTS).map(k => [k, saved[k] === undefined ? MODULES_DEFAULTS[k] : saved[k]])
   );
-  const isAdmin = user?.role === 'admin';
-  const isPrestataire = user?.role === 'prestataire';
+  // `user.role` ne renvoyait que le premier rôle du contexte, dans le vocabulaire Base44.
+  // Un propriétaire porte `Owner` puis `Admin` : le test sur la chaîne `'admin'` échouait
+  // donc pour lui, et le patron de l'entreprise se retrouvait avec le menu réduit d'un
+  // extra. Même chose pour `'prestataire'`, devenu `Partner` côté serveur.
+  const isAdmin = isBackOffice(user);
+  const isPrestataire = hasRole(user, ROLES.Partner);
 
   const { data: rappelsAujourdhui = [] } = useQuery({
     queryKey: ['rappels-badge'],
