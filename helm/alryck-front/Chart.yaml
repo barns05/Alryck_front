@@ -1,0 +1,11 @@
+apiVersion: v2
+name: alryck-front
+description: >-
+  Front React d'Alryck, servi en statique par nginx. Chart distinct de celui du back : les
+  deux se deploient independamment, sur des hotes et des rythmes differents.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: geo2i
+home: https://app.alryck-dev.geo2i.com

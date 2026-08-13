@@ -1,0 +1,46 @@
+# =============================================================================
+#  Valeurs par defaut du chart alryck-front
+# =============================================================================
+#  Le front est un paquet de fichiers statiques servis par nginx. Il n'a ni base, ni
+#  secret, ni etat : le deployer revient a remplacer des fichiers.
+#
+#  L'ADRESSE DE L'API N'EST PAS ICI. Vite substitue les import.meta.env a la
+#  CONSTRUCTION : elle est figee dans le bundle et se choisit au moment du docker build
+#  (VITE_ALRYCK_API). C'est le prix d'un front statique, et c'est aussi ce qui empeche une
+#  mauvaise configuration en ligne de faire taper la production sur une base de recette.
+# =============================================================================
+
+nameOverride: ""
+fullnameOverride: ""
+
+domain:
+  front: app.alryck-dev.geo2i.com
+
+image:
+  repository: ghcr.io/barns05/alryck-front
+  # On deploie un SHA, jamais un tag mouvant : « v1 » ne dit pas quel code tourne.
+  tag: dev
+  pullPolicy: IfNotPresent
+
+# Les paquets ghcr.io sont prives par defaut. Ce secret est pose par
+# Commandes\08_helm_front.ps1, ou par le script equivalent du back : les deux releases
+# partagent le namespace et donc le meme secret de pull.
+imagePullSecrets:
+  - name: ghcr-cred
+
+replicaCount: 2
+port: 8080
+
+# Un serveur de fichiers statiques ne consomme presque rien. Les limites sont la pour
+# borner un emballement, pas pour dimensionner.
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits:   { cpu: 200m, memory: 128Mi }
+
+ingress:
+  enabled: true
+  className: nginx
+  clusterIssuer: letsencrypt-prod
+  annotations: {}
+  # Le front ne recoit aucun televersement : tout passe par l'API.
+  bodySize: 1m

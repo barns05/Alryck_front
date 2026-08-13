@@ -34,3 +34,7 @@ base44/.app.jsonc
 # Migration Alryck
 .env.local
 _to_delete/
+
+# Deploiement OVH K8s — SECRETS, ne jamais committer
+kubeconfig.yml
+Commandes/.ghcr_token

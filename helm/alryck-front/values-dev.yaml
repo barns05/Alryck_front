@@ -1,0 +1,29 @@
+# =============================================================================
+#  Environnement dev — app.alryck-dev.geo2i.com
+# =============================================================================
+#     .\08_helm_front.ps1 -Env dev -Tag <sha7>
+# =============================================================================
+
+domain:
+  front: app.alryck-dev.geo2i.com
+
+image:
+  tag: dev
+  # Always en dev : un « rollout restart » suffit alors a reprendre la derniere image
+  # publiee sous le meme tag, sans passer par un nouveau deploiement Helm.
+  pullPolicy: Always
+
+replicaCount: 1
+
+# nginx servant une trentaine de fichiers statiques. Ces valeurs ne sont pas frileuses :
+# c'est reellement ce que consomme le processus au repos, quelques megaoctets.
+# Limites basses volontairement : sur ce nud, la somme des limites depasse largement la
+# memoire disponible, et c'est ce surengagement qui provoque les evictions. nginx servant des
+# fichiers statiques n'approchera jamais ces valeurs.
+resources:
+  requests: { cpu: 5m,  memory: 16Mi }
+  limits:   { cpu: 100m, memory: 48Mi }
+
+ingress:
+  className: nginx
+  clusterIssuer: letsencrypt-prod

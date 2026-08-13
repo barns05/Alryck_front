@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "alryck-front.fullname" . }}
+  labels:
+    {{- include "alryck-front.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: front
+  template:
+    metadata:
+      labels:
+        {{- include "alryck-front.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: front
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # /healthz est servi par nginx lui-meme et ne depend pas de l'API : c'est la sante
+          # de CE conteneur qu'on mesure. Une API en panne ne doit pas faire redemarrer en
+          # boucle des pods de front parfaitement sains — le front doit au contraire rester
+          # debout pour afficher un message a l'utilisateur.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          securityContext:
+            # L'image nginx-unprivileged tourne deja en uid 101. On verrouille le reste :
+            # un serveur de fichiers statiques n'a aucune raison d'ecrire ni d'obtenir
+            # de nouveaux droits.
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # nginx ecrit ses fichiers temporaires
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "alryck-front.fullname" . }}
+  labels:
+    {{- include "alryck-front.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: front

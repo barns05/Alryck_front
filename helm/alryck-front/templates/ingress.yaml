@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+# =============================================================================
+#  Exposition publique du front
+# =============================================================================
+#  Ingress et certificat propres, distincts de ceux de l'API bien que les deux vivent dans
+#  le meme namespace. Un renouvellement de certificat en echec sur l'un n'emporte pas
+#  l'autre, et livrer le front ne touche pas a l'exposition de l'API.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "alryck-front.fullname" . }}
+  labels:
+    {{- include "alryck-front.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.bodySize | quote }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.domain.front }}
+      secretName: {{ include "alryck-front.fullname" . }}-tls
+  rules:
+    - host: {{ .Values.domain.front }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "alryck-front.fullname" . }}
+                port:
+                  number: 80
+{{- end }}

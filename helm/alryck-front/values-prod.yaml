@@ -1,0 +1,24 @@
+# =============================================================================
+#  Environnement production — app.alryck.geo2i.com
+# =============================================================================
+#  Non deploye a ce jour. Ce fichier existe pour que la montee en production soit un
+#  changement de parametre et non une reecriture du chart.
+#
+#  ATTENTION : l'image de production doit avoir ete construite avec
+#  VITE_ALRYCK_API=https://api.alryck.geo2i.com. Deployer ici une image construite pour la
+#  recette ferait taper la production sur la base de recette, sans aucun signe visible.
+# =============================================================================
+
+domain:
+  front: app.alryck.geo2i.com
+
+image:
+  tag: v1
+  # IfNotPresent : on deploie un SHA, qui designe une image immuable.
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+ingress:
+  className: nginx
+  clusterIssuer: letsencrypt-prod
