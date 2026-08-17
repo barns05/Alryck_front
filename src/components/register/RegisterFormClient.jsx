@@ -3,11 +3,12 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { PASSWORD_HINT, messageFor, validatePassword } from './registerRules';
 
 const inputCls = "bg-white/[0.08] border-white/[0.15] text-white placeholder:text-white/40 focus-visible:ring-amber-400/60";
 const labelCls = "text-sm font-medium text-white/70";
 
-export default function RegisterFormClient({ onNeedOtp, onSuccess, onBack }) {
+export default function RegisterFormClient({ onSuccess, onBack }) {
   const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', prenom: '', nom: '' });
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -19,25 +20,40 @@ export default function RegisterFormClient({ onNeedOtp, onSuccess, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (form.password !== form.confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+
+    const invalid = validatePassword(form.password, form.confirmPassword);
+    if (invalid) { setError(invalid); return; }
+
     setLoading(true);
-    const fullName = `${form.prenom} ${form.nom}`.trim();
     try {
-      await base44.auth.register({ email: form.email, password: form.password });
-      try {
-        await base44.auth.loginViaEmailPassword(form.email, form.password);
-        await base44.auth.updateMe({ full_name: fullName, role: 'user', onboarding_completed: true });
-        onSuccess('/client-portal');
-      } catch {
-        onNeedOtp(form.email, async () => {
-          await base44.auth.loginViaEmailPassword(form.email, form.password);
-          await base44.auth.updateMe({ full_name: fullName, role: 'user', onboarding_completed: true });
-          onSuccess('/client-portal');
-        });
-      }
+      // Une seule écriture : le compte. L'identité part avec l'inscription plutôt que par
+      // un `updateMe` de rattrapage, et le jeton renvoyé authentifie déjà la personne —
+      // la reconnexion qui suivait était redondante.
+      //
+      // Le rôle n'est délibérément pas transmis : il vit dans l'appartenance à une
+      // entreprise, et c'est le serveur qui le pose. L'ancien `updateMe({ role: 'user' })`
+      // était sans effet, le client d'API l'écarte.
+      await base44.auth.register({
+        email: form.email,
+        password: form.password,
+        firstName: form.prenom,
+        lastName: form.nom,
+        displayName: `${form.prenom} ${form.nom}`.trim(),
+      });
+
+      // Le compte existe, il n'appartient encore à personne : c'est l'espace personnel qui
+      // sait afficher cet état — ses invitations, ses espaces, et le moyen d'en ouvrir un.
+      // Le portail client, lui, ne s'ouvre que sur le lien envoyé par l'organisateur.
+      // L'espace personnel n'est volontairement pas créé ici. Il l'était, dans un `catch`
+      // silencieux pour ne pas faire passer un compte créé pour une inscription ratée — et
+      // ce silence a masqué un vrai échec serveur, laissant un écran vide sans explication.
+      // Le provisionnement se fait donc à l'arrivée, où il peut s'afficher et se réessayer.
+
+      // `from=register` évite que l'espace personnel repose la question du profil qui
+      // vient d'être choisi ; `profile` sert au message d'accueil.
+      onSuccess('/espace-invite?from=register&profile=client');
     } catch (err) {
-      setError(err?.message || 'Une erreur est survenue. Cet email est peut-être déjà utilisé.');
+      setError(messageFor(err));
     } finally {
       setLoading(false);
     }
@@ -82,7 +98,7 @@ export default function RegisterFormClient({ onNeedOtp, onSuccess, onBack }) {
           <div className="relative">
             <Input required type={showPwd ? 'text' : 'password'} value={form.password}
               onChange={e => set('password', e.target.value)}
-              placeholder="Minimum 8 caractères" className={`${inputCls} pr-10`} />
+              placeholder={PASSWORD_HINT} className={`${inputCls} pr-10`} />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors">
               {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}

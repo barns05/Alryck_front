@@ -179,6 +179,10 @@ const auth = {
       full_name: me.displayName,
       role: (me.currentRoles ?? []).map((r) => r.toLowerCase())[0] ?? 'user',
       roles: me.currentRoles ?? [],
+      // « Business » ou « Personal ». Le rôle ne suffit pas à router : le propriétaire d'un
+      // espace personnel porte Owner comme un patron de traiteur, mais son accueil n'est
+      // pas le back-office.
+      tenantKind: me.currentTenantKind ?? null,
     };
     return cachedUser;
   },
@@ -261,10 +265,29 @@ const tenants = {
    * Crée l'entreprise du compte connecté, qui en devient propriétaire.
    * Le serveur renvoie un jeton portant déjà ce contexte : inutile de se reconnecter.
    */
-  create: async ({ name, slug, siren, timeZoneId, establishmentName } = {}) => {
+  create: async ({ name, slug, siren, timeZoneId, establishmentName, tradeCode } = {}) => {
     const result = await request('/api/tenants', {
       method: 'POST',
-      body: { name, slug, siren, timeZoneId, establishmentName },
+      // `tradeCode` manquait ici alors que le formulaire d'inscription l'envoie et que le
+      // serveur l'attend : le métier choisi était perdu entre les deux, et la vitrine se
+      // créait sans lui, sans que rien ne le signale.
+      body: { name, slug, siren, timeZoneId, establishmentName, tradeCode },
+    });
+
+    tokenStore.set(result.accessToken);
+    tokenStore.setTenant(result.id);
+    cachedUser = null;
+    return result;
+  },
+
+  /**
+   * Crée l'espace personnel du compte connecté : le périmètre où vivront les événements
+   * qu'il organise pour lui-même. Idempotent côté serveur.
+   */
+  createPersonal: async ({ name } = {}) => {
+    const result = await request('/api/tenants/personal', {
+      method: 'POST',
+      body: { name },
     });
 
     tokenStore.set(result.accessToken);
@@ -275,6 +298,19 @@ const tenants = {
 
   /** Entreprise du contexte de travail courant, avec ses établissements. */
   current: () => request('/api/tenants/current'),
+};
+
+// --- Dossiers événement (endpoint métier, hors couche de compatibilité) -------
+
+const events = {
+  /** Les dossiers du contexte de travail courant. */
+  list: () => request('/api/events'),
+
+  /**
+   * Crée un dossier et son moment principal. Dans un espace personnel, le contact est
+   * résolu côté serveur — le titulaire est le contact de ses propres dossiers.
+   */
+  create: (payload) => request('/api/events', { method: 'POST', body: payload }),
 };
 
 // --- Fonctions et intégrations ----------------------------------------------
@@ -309,5 +345,5 @@ const integrations = {
   },
 };
 
-export const base44 = { entities, auth, tenants, referentials, functions, integrations };
+export const base44 = { entities, auth, tenants, events, referentials, functions, integrations };
 export default base44;

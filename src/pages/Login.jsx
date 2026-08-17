@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { homeRouteFor } from '@/lib/roles';
 
 // =============================================================================
 //  Connexion
@@ -27,7 +28,23 @@ export default function Login() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const destination = params.get('from') || '/Dashboard';
+  const requested = params.get('from');
+
+  /**
+   * Destination après connexion. Une page demandée explicitement l'emporte ; sinon on
+   * suit les rôles du contexte retenu.
+   *
+   * Le cas à ne pas manquer est celui du compte **sans appartenance** : inscrit, mais
+   * rattaché à aucune entreprise. Il partait auparavant sur `/Dashboard`, c'est-à-dire un
+   * back-office qui n'a rien à lui montrer. Sa place est l'espace personnel.
+   */
+  //
+  // `kind` compte autant que les rôles : le titulaire d'un espace personnel porte `Owner`,
+  // exactement comme un patron de traiteur. L'omettre l'envoie sur le back-office.
+  const destinationFor = (context) => requested || homeRouteFor({
+    roles: context?.roles ?? [],
+    tenantKind: context?.kind,
+  });
 
   const submit = async (event) => {
     event.preventDefault();
@@ -37,13 +54,16 @@ export default function Login() {
     try {
       const result = await base44.auth.loginViaEmailPassword(email, password);
 
+      // Plusieurs entreprises : on fait choisir plutôt que d'en supposer une.
       if (result.contexts?.length > 1) {
         setContexts(result.contexts);
         return;
       }
 
+      // Zéro ou un contexte : le serveur a déjà sélectionné le seul possible, le jeton
+      // porte donc les rôles à jour.
       await checkAppState();
-      navigate(destination, { replace: true });
+      navigate(destinationFor(result.contexts?.[0]), { replace: true });
     } catch (err) {
       setError(
         err.code === 'auth.locked_out'
@@ -55,12 +75,12 @@ export default function Login() {
     }
   };
 
-  const chooseContext = async (tenantId) => {
+  const chooseContext = async (context) => {
     setBusy(true);
     try {
-      await base44.auth.switchContext(tenantId);
+      await base44.auth.switchContext(context.tenantId);
       await checkAppState();
-      navigate(destination, { replace: true });
+      navigate(destinationFor(context), { replace: true });
     } finally {
       setBusy(false);
     }
@@ -85,7 +105,7 @@ export default function Login() {
                   key={context.tenantId}
                   type="button"
                   disabled={busy}
-                  onClick={() => chooseContext(context.tenantId)}
+                  onClick={() => chooseContext(context)}
                   className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50"
                 >
                   <span className="block font-medium text-slate-900">{context.tenantName}</span>

@@ -1,5 +1,11 @@
 import { Info } from 'lucide-react';
 
+/**
+ * Rappel affiché sous les espaces d'un compte qui en a plusieurs.
+ *
+ * Le texte renvoyait auparavant à « un sélecteur en haut de l'écran » qui n'existe dans
+ * aucun écran. Il désigne désormais la liste « Mes espaces », qui est réellement là.
+ */
 export default function InfoBanner() {
   return (
     <div
@@ -10,9 +16,10 @@ export default function InfoBanner() {
         <Info size={16} className="text-gray-400" />
       </div>
       <div className="space-y-0.5">
-        <p className="text-sm font-semibold text-gray-700">Plusieurs rôles activés</p>
+        <p className="text-sm font-semibold text-gray-700">Plusieurs espaces</p>
         <p className="text-xs text-gray-400 leading-relaxed">
-          Changez d'espace à tout moment grâce au sélecteur en haut de l'écran.
+          Votre compte est rattaché à plusieurs entreprises. Revenez sur cette page pour
+          passer de l'une à l'autre.
         </p>
       </div>
     </div>

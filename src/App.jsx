@@ -61,6 +61,7 @@ import InvitePortal from '@/pages/InvitePortal';
 import ProgrammePublic from '@/pages/ProgrammePublic';
 import EspaceInvite from '@/pages/EspaceInvite';
 import InvitationDetail from '@/pages/InvitationDetail';
+import { homeRouteFor, isBackOffice } from '@/lib/roles';
 
 const AuthenticatedApp = ({ onAuthReady }) => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -71,21 +72,30 @@ const AuthenticatedApp = ({ onAuthReady }) => {
     }
   }, [isLoadingAuth, isLoadingPublicSettings]);
   const [currentUser, setCurrentUser] = useState(null);
+  // L'accueil se décide sur les rôles : tant qu'ils ne sont pas connus, rediriger
+  // reviendrait à parier sur « aucun rôle » et à expédier un administrateur vers
+  // l'espace personnel le temps d'un aller-retour réseau.
+  const [userResolved, setUserResolved] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     base44.auth.me().then(async (user) => {
       setCurrentUser(user);
-      if (user?.role === 'admin') {
+      // L'onboarding demande une raison sociale, un métier et un téléphone professionnel :
+      // c'est la configuration d'une **entreprise**. `isBackOffice` exclut les espaces
+      // personnels, dont le titulaire porte pourtant `Owner` comme un patron de traiteur —
+      // sans cette nuance, un particulier qui vient d'ouvrir son espace se voyait demander
+      // le nom de sa société.
+      if (isBackOffice(user)) {
         // Vérifier le flag onboarding_completed dans le profil utilisateur
         const onboardingCompleted = user.onboarding_completed === true;
-        
+
         // Si c'est un nouvel utilisateur (pas encore de flag), afficher l'onboarding
         if (!onboardingCompleted) {
           setShowOnboarding(true);
         }
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setUserResolved(true));
   }, []);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -114,12 +124,19 @@ const AuthenticatedApp = ({ onAuthReady }) => {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Navigate to={
-    currentUser?.role === 'extra' ? '/MonPlanning' :
-    currentUser?.role === 'prestataire' ? '/MonEspacePrestataire' :
-    currentUser?.role === 'lieu' ? '/lieu-portal' :
-    '/Dashboard'
-  } replace />} />
+        {/* L'accueil dépend des rôles du contexte courant, jamais d'un rôle unique deviné :
+            un propriétaire porte `Owner` *et* `Admin`, et un compte fraîchement inscrit n'en
+            porte aucun. `homeRouteFor` centralise la règle (voir src/lib/roles.js). */}
+        <Route
+          path="/"
+          element={userResolved
+            ? <Navigate to={homeRouteFor(currentUser)} replace />
+            : (
+              <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'radial-gradient(ellipse at center, #2d2a6e 0%, #1e1b4b 70%)' }}>
+                <LoadingCristal size={56} />
+              </div>
+            )}
+        />
         <Route element={<Layout />}>
           <Route path="/Dashboard" element={<Dashboard />} />
           <Route path="/Planning" element={<Planning />} />

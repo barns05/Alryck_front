@@ -3,11 +3,12 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { PASSWORD_HINT, messageFor, validatePassword } from './registerRules';
 
 const inputCls = "bg-white/[0.08] border-white/[0.15] text-white placeholder:text-white/40 focus-visible:ring-amber-400/60";
 const labelCls = "text-sm font-medium text-white/70";
 
-export default function RegisterFormStaff({ onNeedOtp, onSuccess, onBack }) {
+export default function RegisterFormStaff({ onSuccess, onBack }) {
   const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', prenom: '', nom: '' });
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -19,25 +20,29 @@ export default function RegisterFormStaff({ onNeedOtp, onSuccess, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (form.password !== form.confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+
+    const invalid = validatePassword(form.password, form.confirmPassword);
+    if (invalid) { setError(invalid); return; }
+
     setLoading(true);
-    const fullName = `${form.prenom} ${form.nom}`.trim();
     try {
-      await base44.auth.register({ email: form.email, password: form.password });
-      try {
-        await base44.auth.loginViaEmailPassword(form.email, form.password);
-        await base44.auth.updateMe({ full_name: fullName, role: 'extra', onboarding_completed: true });
-        onSuccess('/MonPlanning');
-      } catch {
-        onNeedOtp(form.email, async () => {
-          await base44.auth.loginViaEmailPassword(form.email, form.password);
-          await base44.auth.updateMe({ full_name: fullName, role: 'extra', onboarding_completed: true });
-          onSuccess('/MonPlanning');
-        });
-      }
+      // Même parcours que le formulaire client : une seule écriture, l'identité portée par
+      // l'inscription, et aucun rôle transmis — `updateMe({ role: 'extra' })` était sans
+      // effet, le rôle `Extra` vient de l'appartenance créée par le traiteur qui recrute.
+      await base44.auth.register({
+        email: form.email,
+        password: form.password,
+        firstName: form.prenom,
+        lastName: form.nom,
+        displayName: `${form.prenom} ${form.nom}`.trim(),
+      });
+
+      // `/MonPlanning` suppose une entreprise et un rôle : tant qu'aucun traiteur n'a
+      // recruté cette personne, il n'y a pas de planning à afficher.
+      // Voir RegisterFormClient : le profil choisi ne doit pas être redemandé à l'arrivée.
+      onSuccess('/espace-invite?from=register&profile=staff');
     } catch (err) {
-      setError(err?.message || 'Une erreur est survenue. Cet email est peut-être déjà utilisé.');
+      setError(messageFor(err));
     } finally {
       setLoading(false);
     }
@@ -82,7 +87,7 @@ export default function RegisterFormStaff({ onNeedOtp, onSuccess, onBack }) {
           <div className="relative">
             <Input required type={showPwd ? 'text' : 'password'} value={form.password}
               onChange={e => set('password', e.target.value)}
-              placeholder="Minimum 8 caractères" className={`${inputCls} pr-10`} />
+              placeholder={PASSWORD_HINT} className={`${inputCls} pr-10`} />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors">
               {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}

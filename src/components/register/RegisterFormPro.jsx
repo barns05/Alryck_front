@@ -3,6 +3,10 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+// La règle de mot de passe et la traduction des codes d'erreur sont communes aux trois
+// formulaires : les garder ici les avait fait diverger (8 caractères côté client et
+// équipe, 10 côté serveur).
+import { PASSWORD_HINT, messageFor, validatePassword } from './registerRules';
 
 // La liste des métiers vient désormais du référentiel servi par le back (GET /api/trades) et
 // non plus d'un tableau codé ici. Elle porte des codes stables, ce qui permet de rattacher la
@@ -21,25 +25,6 @@ function groupByFamily(trades) {
 
 const inputCls = "bg-white/[0.08] border-white/[0.15] text-white placeholder:text-white/40 focus-visible:ring-amber-400/60";
 const labelCls = "text-sm font-medium text-white/70";
-
-/** Longueur minimale imposée par ASP.NET Identity côté serveur. */
-const PASSWORD_MIN = 10;
-
-/** Traduit les codes d'erreur stables du back en message lisible. */
-function messageFor(err) {
-  switch (err?.code) {
-    case 'auth.email_taken':
-      return 'Un compte existe déjà avec cette adresse.';
-    case 'auth.invalid_credentials':
-      return 'Un compte existe déjà avec cette adresse, et ce mot de passe ne correspond pas.';
-    case 'auth.weak_password':
-      return err.payload?.errors?.join(' ') || 'Ce mot de passe est trop faible.';
-    case 'tenant.slug_taken':
-      return "Ce nom d'entreprise est déjà utilisé sur la plateforme. Essayez une variante.";
-    default:
-      return err?.message || 'Une erreur est survenue.';
-  }
-}
 
 export default function RegisterFormPro({ onSuccess, onBack }) {
   const [form, setForm] = useState({ prenom: '', nom: '', email: '', password: '', confirmPassword: '', companyName: '', tradeCode: '' });
@@ -64,11 +49,10 @@ export default function RegisterFormPro({ onSuccess, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (form.password !== form.confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return; }
-    if (form.password.length < PASSWORD_MIN) {
-      setError(`Le mot de passe doit contenir au moins ${PASSWORD_MIN} caractères.`);
-      return;
-    }
+
+    const invalid = validatePassword(form.password, form.confirmPassword);
+    if (invalid) { setError(invalid); return; }
+
     setLoading(true);
     try {
       // 1. Le compte. Une personne, un compte, global à la plateforme : il n'appartient
@@ -180,7 +164,7 @@ export default function RegisterFormPro({ onSuccess, onBack }) {
           <div className="relative">
             <Input required type={showPwd ? 'text' : 'password'} value={form.password}
               onChange={e => set('password', e.target.value)}
-              placeholder={`Minimum ${PASSWORD_MIN} caractères`} className={`${inputCls} pr-10`} />
+              placeholder={PASSWORD_HINT} className={`${inputCls} pr-10`} />
             <button type="button" onClick={() => setShowPwd(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors">
               {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}

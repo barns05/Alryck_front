@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+#  Fins de ligne — normalisation du dépôt
+#
+#  Sans ce fichier, un dépôt travaillé sous Windows (CRLF sur le disque)
+#  apparaît intégralement modifié dès qu'on le lit depuis Linux, WSL, un
+#  conteneur ou une CI : ~98 000 lignes de faux diff, qui masquent les vraies
+#  modifications. `text=auto` demande à git de stocker du LF dans l'index et
+#  de restituer la fin de ligne native à chaque poste.
+# ---------------------------------------------------------------------------
+* text=auto
+
+# Scripts Windows — doivent rester en CRLF sur le disque
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Scripts et fichiers Unix — doivent rester en LF (sinon shebang cassé)
+*.sh        text eol=lf
+Dockerfile* text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binaires — aucune conversion, jamais
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.zip  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
